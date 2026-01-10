@@ -16,4 +16,7 @@ dependencies = [
     "lxml",
     "pymupdf>=1.25.5",
     "openai>=1.84.0",
+    "langchain-core>=1.2.7",
+    "langchain-openai>=1.1.7",
+    "langchain-text-splitters>=1.1.0",
 ]

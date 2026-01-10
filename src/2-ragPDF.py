@@ -1,15 +1,20 @@
 import streamlit as st
 import fitz  # PyMuPDF for PDF parsing
-import google.generativeai as genai
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
-from langchain_google_genai import GoogleGenerativeAI 
-from langchain.vectorstores import FAISS
-from langchain.docstore.document import Document
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.chains.question_answering import load_qa_chain
-#from langchain.llms import GooglePalm  # Using Gemini through LangChain
-GOOGLE_API_KEY = st.secrets.get("GOOGLE_API_KEY")
-genai.configure(api_key=GOOGLE_API_KEY)
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain_community.vectorstores import FAISS
+from langchain_core.documents import Document
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_core.prompts import ChatPromptTemplate
+OPENAI_API_KEY = st.secrets.get("OPENAI_API_KEY")
+
+QA_PROMPT = ChatPromptTemplate.from_messages([
+    (
+        "system",
+        "You are a helpful assistant. Answer the user's question using the provided context."
+        " If the context does not contain the answer, reply that the information is unavailable.\n\n{context}",
+    ),
+    ("human", "{question}"),
+])
 
 def extract_text_from_pdf(pdf_file):
     """Extracts text from uploaded PDF file."""
@@ -24,20 +29,20 @@ def process_document(text):
     documents = [Document(page_content=t) for t in texts]
 
     # Embedding model for vector storage
-    embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-exp-03-07")
+    embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
     vector_store = FAISS.from_documents(documents, embeddings)
 
     return vector_store
 
 def chat_with_pdf(query, vector_store):
-    """Uses LangChain with Gemini API for RAG-based response."""
-    retriever = vector_store.as_retriever()
-    relevant_docs = retriever.get_relevant_documents(query)
-    llm = GoogleGenerativeAI(model="models/gemini-2.5-flash-preview-04-17")
-    chain = load_qa_chain(llm=llm, chain_type="stuff")
-    response = chain.run(input_documents=relevant_docs, question=query)
+    """Uses LangChain with OpenAI API for RAG-based response."""
+    relevant_docs = vector_store.similarity_search(query)
+    context = "\n\n".join(doc.page_content for doc in relevant_docs)
+    llm = ChatOpenAI(openai_api_key=OPENAI_API_KEY, model_name="gpt-5-mini")
+    prompt_value = QA_PROMPT.invoke({"context": context, "question": query})
+    response = llm.invoke(prompt_value.to_messages())
 
-    return response
+    return response.content
 
 # Streamlit UI
 st.title("Chat with a PDF")
